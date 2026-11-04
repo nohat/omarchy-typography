@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "presets": [
+    { "id": "stock", "name": "Original Omarchy", "ui": null, "mono": null,
+      "note": "Stock Omarchy: the shell follows the fontconfig monospace alias (JetBrainsMono Nerd Font); GTK keeps Adwaita Sans." },
+
+    { "id": "modernist-classic",      "name": "Modernist Classic",      "ui": ["Jost"],              "mono": ["Space Mono"] },
+    { "id": "modernist-industrial",   "name": "Modernist Industrial",   "ui": ["Jost"],              "mono": ["IBM Plex Mono"] },
+    { "id": "modernist-practical",    "name": "Modernist Practical",    "ui": ["Jost"],              "mono": ["JetBrains Mono"] },
+    { "id": "contemporary-geometric", "name": "Contemporary Geometric", "ui": ["Outfit"],            "mono": ["DM Mono"] },
+    { "id": "contemporary-technical", "name": "Contemporary Technical", "ui": ["Outfit"],            "mono": ["Geist Mono"] },
+    { "id": "refined-geometric",      "name": "Refined Geometric",      "ui": ["Urbanist"],          "mono": ["Sometype Mono"] },
+    { "id": "refined-technical",      "name": "Refined Technical",      "ui": ["Urbanist"],          "mono": ["CommitMono", "Commit Mono"] },
+    { "id": "geometric-humanist",     "name": "Geometric Humanist",     "ui": ["Plus Jakarta Sans"], "mono": ["IBM Plex Mono"] },
+    { "id": "geometric-developer",    "name": "Geometric Developer",    "ui": ["Plus Jakarta Sans"], "mono": ["JetBrains Mono"] },
+    { "id": "playful-geometric",      "name": "Playful Geometric",      "ui": ["Poppins"],           "mono": ["Space Mono"] },
+    { "id": "playful-restrained",     "name": "Playful Restrained",     "ui": ["Poppins"],           "mono": ["DM Mono"] },
+
+    { "id": "sophisticated-modernist",   "name": "Sophisticated Modernist",   "ui": ["Avenir Next", "Avenir Next LT Pro"], "mono": ["SF Mono"],
+      "commercial": true },
+    { "id": "sophisticated-alternative", "name": "Sophisticated Alternative", "ui": ["Avenir Next", "Avenir Next LT Pro"], "mono": ["Neue Montreal Mono", "PP Neue Montreal Mono"],
+      "commercial": true },
+    { "id": "futura-contemporary",       "name": "Futura Contemporary",       "ui": ["Futura Now Text", "Futura Now"], "mono": ["Space Mono"],
+      "commercial": true },
+    { "id": "futura-industrial",         "name": "Futura Industrial",         "ui": ["Futura Now Text", "Futura Now"], "mono": ["FF DIN Mono", "DIN Mono", "DIN Mono Pro"],
+      "commercial": true }
+  ],
+  "licensing": {
+    "Avenir Next": "Commercial (Linotype/Monotype). The copy bundled with macOS is licensed for use on macOS only and must not be copied into this Linux VM. Buy a desktop licence from Monotype, then: omarchy-typography import <files>.",
+    "SF Mono": "Apple proprietary. Apple's licence restricts SF Mono to Apple platforms; no Linux desktop licence is offered. Use `omarchy-typography substitute` with an explicitly chosen alternative.",
+    "Neue Montreal Mono": "Commercial (Pangram Pangram). A free personal-use trial is available after signing in at pangrampangram.com; download it yourself, then: omarchy-typography import <files>.",
+    "Futura Now Text": "Commercial (Monotype). Buy a desktop licence for Futura Now Text, then: omarchy-typography import <files>.",
+    "FF DIN Mono": "Commercial (Monotype/FontFont). Buy a desktop licence, then: omarchy-typography import <files>."
+  },
+  "notes": {
+    "Urbanist": "No tabular figures in the font (no tnum feature, proportional digits). Clock and readout digits will shift width as they change.",
+    "Poppins": "No tabular figures in the font (no tnum feature, proportional digits). Clock and readout digits will shift width as they change."
+  }
+}

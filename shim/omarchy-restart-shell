@@ -1,0 +1,5 @@
+#!/bin/bash
+# omarchy-typography shim: placed first on PATH only while omarchy-font-set runs
+# for a non-stock preset. The shell then draws with the UI family, so the
+# monospace-alias change needs no shell restart.
+exit 0

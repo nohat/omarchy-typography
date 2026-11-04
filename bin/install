@@ -1,0 +1,141 @@
+#!/bin/bash
+# omarchy-typography installer. Idempotent; safe to re-run.
+#
+# `omarchy plugin add` only clones this folder. This script is the separate,
+# explicit setup step: it lists every change, asks before making any, and
+# changes nothing about how the desktop looks until you pick a preset.
+#
+#   bin/install          interactive (asks for confirmation)
+#   bin/install --yes    no prompt
+
+set -euo pipefail
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-typography"
+FD="$HOME/.local/share/fonts/omarchy-typography"
+B="$DATA/baseline"
+ID="$(jq -r .id "$ROOT/manifest.json")"
+CLI="$ROOT/bin/omarchy-typography"
+ASSUME_YES=0; [[ ${1:-} == --yes || ${1:-} == -y ]] && ASSUME_YES=1
+say() { printf '\033[1m%s\033[0m\n' "$*"; }
+die() { echo "omarchy-typography install: $*" >&2; exit 1; }
+
+for c in jq fc-list fc-cache curl unzip python3 sha256sum gsettings hyprctl omarchy-font-set omarchy-plugin-enable; do
+  command -v "$c" >/dev/null || die "missing dependency: $c"
+done
+
+if (( ! ASSUME_YES )); then
+  cat <<EOF
+
+omarchy-typography will make these changes (all in your home directory):
+
+  • Download open-licence (OFL) fonts at pinned versions, verified by SHA-256
+      from github.com/google/fonts, Commit Mono and nerd-fonts releases
+      into $FD
+  • Create a Python venv with fonttools (pinned) in $DATA/venv
+      and build tabular-figure copies of Jost, Outfit and Plus Jakarta Sans
+  • Save a baseline copy of the configs it may change, in $B
+  • Add an icon fallback:  ~/.config/fontconfig/conf.d/60-omarchy-typography.conf
+  • Add a font-set hook:   ~/.config/omarchy/hooks/font-set.d/omarchy-typography
+  • Add a marked block of Appearance › Typography rows to
+      ~/.config/omarchy/extensions/omarchy-menu.jsonc
+  • Append a marked, guarded include to ~/.config/hypr/hyprland.lua
+  • Link the CLI to ~/.local/bin/omarchy-typography
+  • Enable the $ID plugin and restart the shell once
+
+Nothing changes how the desktop looks until you choose a preset.
+Notification text stays on the built-in notifier unless you run:
+  omarchy-typography notifications on
+Undo everything with: omarchy-typography uninstall
+
+EOF
+  [[ -t 0 ]] || die "not a terminal; re-run with --yes to accept the changes above"
+  read -r -p "Proceed? [y/N] " answer
+  [[ $answer == [yY]* ]] || die "cancelled; nothing was changed"
+fi
+
+# ------------------------------------------------------------------ 1. baseline
+if [[ ! -f $B/manifest.json ]]; then
+  say "Saving baseline"
+  mkdir -p "$B/files"
+  files=(alacritty/alacritty.toml foot/foot.ini ghostty/config kitty/kitty.conf omarchy/shell.json omarchy/extensions/omarchy-menu.jsonc hypr/hyprland.lua)
+  for f in "${files[@]}"; do
+    [[ -f $HOME/.config/$f ]] || continue
+    mkdir -p "$B/files/.config/$(dirname "$f")"; cp -a "$HOME/.config/$f" "$B/files/.config/$f"
+  done
+  g() { gsettings get org.gnome.desktop.interface "$1" | sed "s/^'//;s/'$//"; }
+  jq -n --arg t "$(date -Iseconds)" --arg v "$(omarchy version 2>/dev/null || echo unknown)" \
+     --argjson fcdir "$([[ -d $HOME/.config/fontconfig ]] && echo true || echo false)" \
+     --argjson fconf "$([[ -f $HOME/.config/fontconfig/fonts.conf ]] && echo true || echo false)" \
+     --arg fn "$(g font-name)" --arg mn "$(g monospace-font-name)" --arg dn "$(g document-font-name)" \
+     --arg cur "$(omarchy-font-current)" --arg fm "$(fc-match monospace -f '%{family[0]}')" --arg fs "$(fc-match sans-serif -f '%{family[0]}')" \
+     --argjson files "$(printf '%s\n' "${files[@]}" | jq -R . | jq -s .)" \
+     '{captured:$t, omarchy_version:$v, fontconfig_user_dir_existed:$fcdir, fonts_conf_existed:$fconf,
+       gsettings:{"font-name":$fn,"monospace-font-name":$mn,"document-font-name":$dn},
+       omarchy_font_current:$cur, fc_match_monospace:$fm, fc_match_sans:$fs, files:$files}' >"$B/manifest.json"
+  (cd "$B/files" && find . -type f -exec sha256sum {} + >"$B/sha256sums")
+  chmod -R a-w "$B"
+else
+  say "Baseline already saved ($(jq -r .captured "$B/manifest.json")); kept"
+fi
+
+# ------------------------------------------------------------------ 2. fonts (pinned + verified)
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+verify() { [[ $(sha256sum "$1" | cut -c1-64) == "$2" ]]; }
+fetch() { # sha url dest
+  local sha=$1 url=$2 dest=$3
+  if [[ -f $dest ]] && verify "$dest" "$sha"; then return 0; fi
+  mkdir -p "$(dirname "$dest")"
+  curl -sSfL -m 180 -o "$tmp/dl" "$url" || die "download failed: $url"
+  verify "$tmp/dl" "$sha" || die "checksum mismatch for $url; refusing to install it"
+  mv "$tmp/dl" "$dest"
+}
+say "Fonts (OFL, pinned and verified)"
+while IFS=$'\t' read -r sha path url; do
+  [[ -z $sha || $sha == \#* ]] && continue
+  case $path in
+    commitmono-zip)
+      [[ -f $FD/commitmono/CommitMono-400-Regular.otf ]] && continue
+      fetch "$sha" "$url" "$tmp/cm.zip"; mkdir -p "$tmp/cm" "$FD/commitmono"; unzip -q "$tmp/cm.zip" -d "$tmp/cm"
+      cp "$tmp"/cm/CommitMono-*/*.otf "$tmp"/cm/CommitMono-*/license.txt "$FD/commitmono/" ;;
+    symbols-zip)
+      [[ -f $FD/symbolsnerdfont/SymbolsNerdFont-Regular.ttf ]] && continue
+      fetch "$sha" "$url" "$tmp/nf.zip"; mkdir -p "$tmp/nf" "$FD/symbolsnerdfont"; unzip -q "$tmp/nf.zip" -d "$tmp/nf"
+      cp "$tmp"/nf/SymbolsNerdFont*-Regular.ttf "$tmp/nf/LICENSE" "$FD/symbolsnerdfont/" ;;
+    *) fetch "$sha" "$url" "$FD/$path" ;;
+  esac
+done <"$ROOT/share/fonts.lock"
+
+if [[ ! -x $DATA/venv/bin/pyftfeatfreeze ]]; then
+  say "fonttools venv (pinned)"
+  python3 -m venv "$DATA/venv"
+  "$DATA/venv/bin/pip" install -q --disable-pip-version-check "fonttools==4.68.0" "opentype-feature-freezer==1.32.2"
+fi
+mkdir -p "$FD/tabular"
+for f in "jost/Jost[wght].ttf" "jost/Jost-Italic[wght].ttf" "outfit/Outfit[wght].ttf" \
+         "plusjakartasans/PlusJakartaSans[wght].ttf" "plusjakartasans/PlusJakartaSans-Italic[wght].ttf"; do
+  out="$FD/tabular/$(basename "$f" .ttf)-Tabular.ttf"
+  [[ -f $out ]] || "$DATA/venv/bin/pyftfeatfreeze" -f tnum -S -U Tabular "$FD/$f" "$out" >/dev/null
+done
+fc-cache -f "$FD" >/dev/null
+
+# ------------------------------------------------------------------ 3. integration
+say "Integration"
+mkdir -p "$HOME/.local/bin" "$HOME/.config/fontconfig/conf.d" "$HOME/.config/omarchy/hooks/font-set.d" \
+         "$HOME/.config/omarchy/hooks/post-update.d" "$HOME/.config/omarchy/typography" "$HOME/.config/omarchy/extensions"
+ln -sfn "$CLI" "$HOME/.local/bin/omarchy-typography"
+cp "$ROOT/share/60-omarchy-typography.conf" "$HOME/.config/fontconfig/conf.d/"
+printf '#!/bin/bash\n# omarchy-typography: record `omarchy font set` as the monospace role while a preset is active.\n[[ -x %q ]] && %q _hook-font-set "$1"\nexit 0\n' "$CLI" "$CLI" \
+  >"$HOME/.config/omarchy/hooks/font-set.d/omarchy-typography"
+printf '#!/bin/bash\n# omarchy-typography: rebuild the opt-in notifications clone from the updated upstream.\n[[ -d $HOME/.config/omarchy/plugins/${USER}.notifications && -x %q ]] && %q && omarchy-restart-shell >/dev/null 2>&1\nexit 0\n' \
+  "$ROOT/bin/notifications-sync" "$ROOT/bin/notifications-sync" >"$HOME/.config/omarchy/hooks/post-update.d/omarchy-typography"
+chmod +x "$HOME/.config/omarchy/hooks/font-set.d/omarchy-typography" "$HOME/.config/omarchy/hooks/post-update.d/omarchy-typography"
+grep -q "omarchy-typography >>>" "$HOME/.config/hypr/hyprland.lua" || cat "$ROOT/share/hypr-include.lua" >>"$HOME/.config/hypr/hyprland.lua"
+python3 -I "$ROOT/share/menu_block.py" "$HOME/.config/omarchy/extensions/omarchy-menu.jsonc" "$ROOT/share/presets.json" "$CLI"
+# The shell's state watcher cannot see a file appear later, so one must exist at shell start.
+[[ -f $HOME/.config/omarchy/typography/state.json ]] || \
+  jq -n --arg t "$(date -Iseconds)" '{version:1, preset:"stock", updated:$t}' >"$HOME/.config/omarchy/typography/state.json"
+jq -e --arg id "$ID" '.plugins[]? | select(.id==$id)' "$HOME/.config/omarchy/shell.json" >/dev/null 2>&1 || omarchy-plugin-enable "$ID" >/dev/null
+hyprctl reload >/dev/null 2>&1 || true
+# Qt reads fontconfig configuration at process start: restart once so the icon fallback applies.
+omarchy-restart-shell
+say "Installed. Open Appearance › Typography, or run: omarchy-typography list"

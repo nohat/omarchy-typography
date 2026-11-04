@@ -1,0 +1,5 @@
+#!/bin/bash
+# omarchy-typography shim: suppresses omarchy-font-set's "restart Foot to see
+# the change" toast only when OMARCHY_TYPOGRAPHY_QUIET=1 (automated test runs).
+[[ ${OMARCHY_TYPOGRAPHY_QUIET:-0} == 1 ]] && exit 0
+exec /usr/bin/omarchy-notification-send "$@"

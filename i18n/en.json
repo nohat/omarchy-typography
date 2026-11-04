@@ -1,0 +1,21 @@
+{
+  "title": "Typography",
+  "active": "Active: %1",
+  "custom": "Custom pairing",
+  "customHint": "Choose any installed proportional and monospace family",
+  "uiFont": "UI font",
+  "monoFont": "Monospace font",
+  "preview": "Preview",
+  "compare": "Compare A/B",
+  "original": "Original Omarchy",
+  "apply": "Apply",
+  "applying": "Applying…",
+  "unavailable": "Unavailable",
+  "substitute": "Substitute",
+  "commercial": "Commercial font",
+  "noTabular": "No tabular figures",
+  "monoCompanion": "Monospace companion",
+  "pinA": "Set as A",
+  "pinB": "Set as B",
+  "hints": "↑↓ choose   ←→ mono companion   A / B pin   Tab compare   Enter apply   Esc close"
+}

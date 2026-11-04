@@ -1,0 +1,54 @@
+#!/bin/bash
+# omarchy-typography: keep a minimally patched clone of omarchy.notifications.
+#
+# Upstream Toast.qml hard-codes "Liberation Sans" for toast title and body, so
+# they cannot follow the shell font. The clone is a pristine copy of the
+# installed upstream with exactly those font.family lines replaced by
+#   (Style.fontFamily === "monospace" ? "Liberation Sans" : Style.font.family)
+# i.e. stock rendering in Original Omarchy mode, the UI font otherwise.
+#
+#   notifications-sync          (re)build the clone if upstream changed
+#   notifications-sync --force  rebuild unconditionally
+#   notifications-sync --remove drop the clone, re-enable the built-in
+# Runs from the post-update hook so the clone never drifts from upstream.
+set -uo pipefail
+ID="${USER:-$(id -un)}.notifications"
+DIR="$HOME/.config/omarchy/plugins/$ID"
+UP="${OMARCHY_PATH:-/usr/share/omarchy}/shell/plugins/notifications"
+STAMP="$DIR/.omarchy-typography-upstream"
+PATCH='(Style.fontFamily === "monospace" ? "Liberation Sans" : Style.font.family)'
+
+upstream_hash() { (cd "$UP" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16); }
+
+remove_clone() {
+  [[ -d $DIR ]] || return 0
+  omarchy-plugin-disable "$ID" >/dev/null 2>&1 || true
+  rm -rf "$DIR"
+  omarchy-plugin-enable omarchy.notifications >/dev/null 2>&1 || true
+}
+
+case ${1:-} in
+  --remove) remove_clone; echo "Notifications: built-in restored"; exit 0 ;;
+  --force) rm -f "$STAMP" ;;
+esac
+
+want=$(upstream_hash)
+if [[ -f $STAMP && $(cat "$STAMP") == "$want" ]]; then exit 0; fi
+
+remove_clone
+omarchy-plugin-clone omarchy.notifications >/dev/null || { echo "clone failed; built-in kept" >&2; exit 1; }
+n=$(grep -c 'font.family: "Liberation Sans"' "$DIR/Toast.qml" || true)
+if (( n == 0 )); then
+  # Upstream no longer hard-codes the family: nothing to patch, keep the built-in.
+  remove_clone
+  omarchy-notification-send -u low "Typography" "Notifications now follow the shell font upstream; the typography clone was removed." 2>/dev/null || true
+  exit 0
+fi
+sed -i "s|font.family: \"Liberation Sans\"|font.family: $PATCH|" "$DIR/Toast.qml"
+# Every difference from upstream must be one of the patched lines.
+extra=$(diff <(sed "s|font.family: \"Liberation Sans\"|font.family: $PATCH|" "$UP/Toast.qml") "$DIR/Toast.qml" | grep -c '^[<>]' || true)
+if (( extra != 0 )); then echo "unexpected diff; reverting to built-in" >&2; remove_clone; exit 1; fi
+jq '.description = "Omarchy notifications with toast text in the shell UI font (omarchy-typography; rebuilt from upstream on update)."' \
+  "$DIR/manifest.json" >"$DIR/manifest.json.tmp" && mv "$DIR/manifest.json.tmp" "$DIR/manifest.json"
+printf '%s\n' "$want" >"$STAMP"
+echo "Notifications: clone of upstream $(echo "$want") with $n font lines patched"
